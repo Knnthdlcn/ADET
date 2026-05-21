@@ -1,19 +1,24 @@
 {
   "expo": {
-    "name": "adet-app",
-    "slug": "adet-app",
+    "name": "Assistive Vision",
+    "slug": "assistive-vision",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "adet",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Assistive Vision uses the camera to capture images for AI scene description and text recognition.",
+        "NSMicrophoneUsageDescription": "Assistive Vision uses the microphone so you can record voice messages for the assistant."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +26,43 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Assistive Vision to use your camera so you can scan images.",
+          "microphonePermission": "Allow Assistive Vision to use your microphone for camera and voice features.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Assistive Vision to choose images for text recognition."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Assistive Vision to record voice messages for the assistant."
+        }
+      ],
+      "expo-asset"
+    ],
+    "extra": {
+      "router": {
+        "root": "app"
+      }
     }
   }
 }
