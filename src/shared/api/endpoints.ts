@@ -1,3 +1,3 @@
 export const endpoints = {
-  analyzeImage: "/analyze-image",
+  analyzeImage: "/api/detect/upload",
 } as const;
