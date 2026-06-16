@@ -31,11 +31,13 @@ export function ServerStatusScreen() {
           Server Connected
         </AppText>
         <AppText tone="muted" className="mt-1">
-          {isApiConfigured ? "Configured backend is ready for image upload testing." : "Frontend mock mode is active."}
+          {isApiConfigured ? "Camera upload will target the configured backend." : "Set the backend URL before testing image analysis."}
         </AppText>
         <View className="mt-6 rounded-2xl bg-[#F6F6FB] p-4">
           <AppText variant="caption" tone="muted">API Base URL</AppText>
           <AppText variant="label" className="mt-1">{env.apiBaseUrl}</AppText>
+          <AppText variant="caption" tone="muted" className="mt-5">URL source</AppText>
+          <AppText variant="label" className="mt-1">{env.apiBaseUrlSource}</AppText>
           <AppText variant="caption" tone="muted" className="mt-5">Last checked</AppText>
           <AppText variant="label" className="mt-1">{formatDateTime(serverStatus.lastChecked)}</AppText>
           <AppText variant="caption" tone="muted" className="mt-5">Mock latency</AppText>
@@ -59,7 +61,7 @@ export function ServerStatusScreen() {
             testServerConnection();
             Alert.alert(
               "Connection test",
-              isApiConfigured ? "Connection check completed for the configured API." : "Frontend mock success. Add EXPO_PUBLIC_API_BASE_URL to test a real backend.",
+              isApiConfigured ? "Camera analysis will use the configured API URL." : "Add EXPO_PUBLIC_API_BASE_URL to test a real backend.",
             );
           }}
         />

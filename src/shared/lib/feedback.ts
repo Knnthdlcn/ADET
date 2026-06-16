@@ -17,3 +17,11 @@ export function successImpact() {
 
   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 }
+
+export function warningImpact() {
+  if (!useSettingsStore.getState().hapticFeedback) {
+    return;
+  }
+
+  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+}

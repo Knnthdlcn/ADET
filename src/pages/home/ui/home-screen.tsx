@@ -239,6 +239,12 @@ export function HomeScreen() {
                 {env.apiBaseUrl}
               </AppText>
               <AppText variant="caption" tone="muted" className="mt-4">
+                URL source
+              </AppText>
+              <AppText variant="label" className="mt-1">
+                {env.apiBaseUrlSource}
+              </AppText>
+              <AppText variant="caption" tone="muted" className="mt-4">
                 Last checked
               </AppText>
               <AppText variant="label" className="mt-1">
@@ -252,8 +258,8 @@ export function HomeScreen() {
                 Alert.alert(
                   "Connection test",
                   isApiConfigured
-                    ? "Connection check sent to the configured API placeholder."
-                    : "Frontend demo connection successful.",
+                    ? "Camera analysis will use the configured API URL."
+                    : "Add EXPO_PUBLIC_API_BASE_URL to test a real backend.",
                 )
               }
             />
