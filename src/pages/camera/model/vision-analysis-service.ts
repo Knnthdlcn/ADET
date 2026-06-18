@@ -19,12 +19,14 @@ type AnalyzeFrameInput = {
 
 export async function analyzeCameraFrame({
   imageUri,
+  mode,
+  detailLevel,
 }: AnalyzeFrameInput): Promise<VisionAnalysis> {
   if (!isApiConfigured) {
     throw new ApiError(backendUnavailableMessage);
   }
 
-  const response = await uploadImage(imageUri);
+  const response = await uploadImage(imageUri, { mode, detailLevel });
   const text = response.text?.trim();
 
   if (!text) {

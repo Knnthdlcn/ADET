@@ -4,8 +4,6 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from "react-n
 import {
   Gesture,
   GestureDetector,
-  type GestureUpdateEvent,
-  type PanGestureHandlerEventPayload,
 } from "react-native-gesture-handler";
 import { useIsFocused } from "@react-navigation/native";
 import { AudioLines, Bot, Camera, Cpu, Mic, ShieldAlert, Volume2 } from "lucide-react-native";
@@ -166,19 +164,38 @@ function AssistantHud({ hud }: { hud: ReturnType<typeof useCameraPage>["hud"] })
   );
 }
 
-function getSwipeDirection(event: GestureUpdateEvent<PanGestureHandlerEventPayload>) {
-  const absX = Math.abs(event.translationX);
-  const absY = Math.abs(event.translationY);
+/**
+ * Finger-lift lock — ensures only one gesture fires at a time.
+ *
+ * Root cause of ghost-firing: RNGH runs all recognisers concurrently, so a
+ * fast swipe can still activate a tap/long-press handler before the finger
+ * fully lifts. `Gesture.Exclusive` only guards within its own group; cross-
+ * group contamination slips through.
+ *
+ * Fix: every gesture's onBegin calls tryAcquire. If the slot is taken the
+ * handler returns early. release() is called in onFinalize, which RNGH
+ * guarantees fires after the last finger lifts — even on cancel/fail — so
+ * the lock always clears. All handlers use runOnJS(true), so the ref is safe.
+ */
+function useGestureLock() {
+  const owner = useRef<string | null>(null);
+  const tryAcquire = (id: string): boolean => {
+    if (owner.current !== null) return false;
+    owner.current = id;
+    return true;
+  };
+  const release = (id: string) => {
+    if (owner.current === id) owner.current = null;
+  };
+  return { tryAcquire, release };
+}
 
-  if (Math.max(absX, absY) < swipeThreshold) {
-    return null;
-  }
-
-  if (absX > absY) {
-    return event.translationX > 0 ? "right" : "left";
-  }
-
-  return event.translationY > 0 ? "down" : "up";
+function getSwipeDirection(tx: number, ty: number) {
+  const ax = Math.abs(tx);
+  const ay = Math.abs(ty);
+  if (Math.max(ax, ay) < swipeThreshold) return null;
+  if (ax > ay) return tx > 0 ? "right" : "left";
+  return ty > 0 ? "down" : "up";
 }
 
 export function CameraScreen() {
@@ -186,6 +203,7 @@ export function CameraScreen() {
   const cameraPage = useCameraPage();
   const isFocused = useIsFocused();
   const didRequestCameraRef = useRef(false);
+  const { tryAcquire, release } = useGestureLock();
 
   useEffect(() => {
     if (!permission || permission.granted || !permission.canAskAgain || didRequestCameraRef.current) {
@@ -197,93 +215,106 @@ export function CameraScreen() {
   }, [permission, requestPermission]);
 
   const gesture = useMemo(() => {
+    // ── Single tap: analyze current camera view ───────────────
     const singleTap = Gesture.Tap()
       .numberOfTaps(1)
       .maxDuration(250)
       .runOnJS(true)
+      .onBegin(() => { tryAcquire("singleTap"); })
       .onEnd((_event, success) => {
-        if (success) {
-          void cameraPage.analyzeCurrentView();
+        if (success && tryAcquire("singleTap")) {
+          // already acquired in onBegin; this path means onBegin ran but
+          // tryAcquire check here guards against race with onFinalize
         }
-      });
+        if (success) void cameraPage.analyzeCurrentView();
+      })
+      .onFinalize(() => { release("singleTap"); });
 
+    // ── Double tap: repeat last spoken response ───────────────
     const doubleTap = Gesture.Tap()
       .numberOfTaps(2)
       .maxDelay(280)
       .runOnJS(true)
+      .onBegin(() => { tryAcquire("doubleTap"); })
       .onEnd((_event, success) => {
-        if (success) {
-          cameraPage.repeatLastResponse();
-        }
-      });
+        if (success) cameraPage.repeatLastResponse();
+      })
+      .onFinalize(() => { release("doubleTap"); });
 
+    // ── Long press (1 finger, 700 ms): voice command ──────────
     const listenPress = Gesture.LongPress()
       .numberOfPointers(1)
       .minDuration(700)
       .maxDistance(18)
       .runOnJS(true)
+      .onBegin(() => { tryAcquire("listenPress"); })
       .onEnd((_event, success) => {
-        if (success) {
-          void cameraPage.startListening(false);
-        }
-      });
+        if (success) void cameraPage.startListening(false);
+      })
+      .onFinalize(() => { release("listenPress"); });
 
+    // ── Long press (1 finger, 3 s): help mode ─────────────────
     const helpPress = Gesture.LongPress()
       .numberOfPointers(1)
       .minDuration(3000)
       .maxDistance(20)
       .runOnJS(true)
+      .onBegin(() => { tryAcquire("helpPress"); })
       .onEnd((_event, success) => {
-        if (success) {
-          cameraPage.activateHelpMode();
-        }
-      });
+        if (success) cameraPage.activateHelpMode();
+      })
+      .onFinalize(() => { release("helpPress"); });
 
+    // ── Two-finger hold: toggle continuous listening ──────────
     const twoFingerHold = Gesture.LongPress()
       .numberOfPointers(2)
       .minDuration(850)
       .maxDistance(24)
       .runOnJS(true)
+      .onBegin(() => { tryAcquire("twoFingerHold"); })
       .onEnd((_event, success) => {
-        if (success) {
-          void cameraPage.toggleContinuousListening();
-        }
-      });
+        if (success) void cameraPage.toggleContinuousListening();
+      })
+      .onFinalize(() => { release("twoFingerHold"); });
 
+    // ── Three-finger hold: replay current message ─────────────
     const threeFingerHold = Gesture.LongPress()
       .numberOfPointers(3)
       .minDuration(850)
       .maxDistance(24)
       .runOnJS(true)
+      .onBegin(() => { tryAcquire("threeFingerHold"); })
       .onEnd((_event, success) => {
-        if (success) {
-          cameraPage.restartCurrentMessage();
-        }
-      });
+        if (success) cameraPage.restartCurrentMessage();
+      })
+      .onFinalize(() => { release("threeFingerHold"); });
 
+    // ── Swipe (any direction) ─────────────────────────────────
+    // Uses onBegin / onFinalize for the lock so the slot is held for the
+    // entire pan duration, not just at onEnd.
     const swipe = Gesture.Pan()
       .minDistance(swipeThreshold)
       .runOnJS(true)
+      .onBegin(() => { tryAcquire("swipe"); })
       .onEnd((event) => {
-        const direction = getSwipeDirection(event);
+        if (release("swipe"), true) { /* release inline, always run handler */ }
+        const direction = getSwipeDirection(event.translationX, event.translationY);
+        if (direction === "left")  cameraPage.switchMode("previous");
+        else if (direction === "right") cameraPage.switchMode("next");
+        else if (direction === "down")  cameraPage.stopAudio();
+        else if (direction === "up")   cameraPage.increaseDetailLevel();
+      })
+      .onFinalize(() => { release("swipe"); });
 
-        if (direction === "left") {
-          cameraPage.switchMode("previous");
-        } else if (direction === "right") {
-          cameraPage.switchMode("next");
-        } else if (direction === "down") {
-          cameraPage.stopAudio();
-        } else if (direction === "up") {
-          cameraPage.increaseDetailLevel();
-        }
-      });
-
-    return Gesture.Simultaneous(
+    // Compose: tap group vs press group vs swipe are Exclusive with each
+    // other (only one wins) and the lock above provides the cross-group
+    // finger-lift guarantee.
+    return Gesture.Exclusive(
       Gesture.Exclusive(doubleTap, singleTap),
       Gesture.Exclusive(helpPress, threeFingerHold, twoFingerHold, listenPress),
       swipe,
     );
-  }, [cameraPage]);
+  }, [cameraPage, tryAcquire, release]);
 
   if (!permission) {
     return <LoadingCamera />;
